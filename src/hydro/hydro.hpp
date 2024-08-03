@@ -103,6 +103,7 @@ class Hydro {
   // following used for FOFC
   DvceArray4D<bool> fofc;  // flag for each cell to indicate if FOFC is needed
   bool use_fofc = false;   // flag to enable FOFC
+  DvceArray5D<Real> utest;  // scratch array for FOFC
 
   // container to hold names of TaskIDs
   HydroTaskIDs id;
@@ -142,7 +143,6 @@ class Hydro {
 
  private:
   MeshBlockPack* pmy_pack;  // ptr to MeshBlockPack containing this Hydro
-  DvceArray5D<Real> utest;  // scratch array for FOFC
 };
 
 } // namespace hydro
