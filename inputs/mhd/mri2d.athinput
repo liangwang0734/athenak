@@ -55,6 +55,7 @@ beta       = 4000      # Plasma beta
 amp        = 0.01      # dP/P <= amp
 ifield     = 1         # 1 for zero-net-flux Bz, 2 for constant Bz
 nwx        = 1         # wavenumber in x1
+user_hist  = true      # enroll user-defined history function
 
 <output1>
 file_type   = hst      # History data dump
