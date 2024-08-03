@@ -34,6 +34,11 @@
 
 #include <Kokkos_Random.hpp>
 
+
+// User-defined history functions
+void MriHistory(HistoryData *pdata, Mesh *pm);
+
+
 //----------------------------------------------------------------------------------------
 //! \fn ProblemGenerator::_()
 //  \brief
@@ -46,6 +51,9 @@ void ProblemGenerator::UserProblem(ParameterInput *pin, const bool restart) {
               << "mri2d problem generator only works in 2D (nx3=1)" << std::endl;
     exit(EXIT_FAILURE);
   }
+
+  // enroll user history function
+  user_hist_func = MriHistory;
 
   // initialize problem variables
   Real amp   = pin->GetReal("problem","amp");
@@ -176,5 +184,72 @@ void ProblemGenerator::UserProblem(ParameterInput *pin, const bool restart) {
     });
   }
 
+  return;
+}
+
+//----------------------------------------------------------------------------------------
+// Function for computing history variables
+void MriHistory(HistoryData *pdata, Mesh *pm) {
+  pdata->nhist = 2;
+  pdata->label[0] = "stress_reynolds";
+  pdata->label[1] = "stress_maxwell";
+
+  // capture class variabels for kernel
+  auto &bcc = pm->pmb_pack->pmhd->bcc0;
+  auto &b = pm->pmb_pack->pmhd->b0;
+  auto &w0_ = pm->pmb_pack->pmhd->w0;
+  auto &size = pm->pmb_pack->pmb->mb_size;
+  int &nhist_ = pdata->nhist;
+
+  // loop over all MeshBlocks in this pack
+  auto &indcs = pm->pmb_pack->pmesh->mb_indcs;
+  int is = indcs.is; int nx1 = indcs.nx1;
+  int js = indcs.js; int nx2 = indcs.nx2;
+  int ks = indcs.ks; int nx3 = indcs.nx3;
+  const int nmkji = (pm->pmb_pack->nmb_thispack)*nx3*nx2*nx1;
+  const int nkji = nx3*nx2*nx1;
+  const int nji  = nx2*nx1;
+  array_sum::GlobalSum sum_this_mb;
+  Kokkos::parallel_reduce("HistSums",Kokkos::RangePolicy<>(DevExeSpace(), 0, nmkji),
+  KOKKOS_LAMBDA(const int &idx, array_sum::GlobalSum &mb_sum) {
+    // compute n,k,j,i indices of thread
+    int m = (idx)/nkji;
+    int k = (idx - m*nkji)/nji;
+    int j = (idx - m*nkji - k*nji)/nx1;
+    int i = (idx - m*nkji - k*nji - j*nx1) + is;
+    k += ks;
+    j += js;
+
+    Real vol = size.d_view(m).dx1*size.d_view(m).dx2*size.d_view(m).dx3;
+    Real dx_squared = size.d_view(m).dx1 * size.d_view(m).dx1;
+
+    // MHD conserved variables:
+    array_sum::GlobalSum hvars;
+
+    // In this 2d simulation, the code coordinate x,y,z are x,z,y (radial,
+    // axial, azimuthal) in typical MRI coordinates
+  
+    // reynolds stress
+    Real alpha_reynolds = w0_(m,IDN,k,j,i)*w0_(m,IVX,k,j,i)*w0_(m,IVZ,k,j,i);
+    hvars.the_array[0] = alpha_reynolds*vol;
+
+    // maxwell stress
+    Real alpha_maxwell = bcc(m,IBX,k,j,i)*bcc(m,IBZ,k,j,i);
+    hvars.the_array[1] = alpha_maxwell*vol;
+
+    // fill rest of the_array with zeros, if nhist < NHISTORY_VARIABLES
+    for (int n=nhist_; n<NHISTORY_VARIABLES; ++n) {
+      hvars.the_array[n] = 0.0;
+    }
+
+    // sum into parallel reduce
+    mb_sum += hvars;
+  }, Kokkos::Sum<array_sum::GlobalSum>(sum_this_mb));
+  Kokkos::fence();
+
+  // store data into hdata array
+  for (int n=0; n<pdata->nhist; ++n) {
+    pdata->hdata[n] = sum_this_mb.the_array[n];
+  }
   return;
 }
