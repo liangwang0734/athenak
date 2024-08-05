@@ -234,7 +234,7 @@ void MriHistory(HistoryData *pdata, Mesh *pm) {
     hvars.the_array[0] = alpha_reynolds*vol;
 
     // maxwell stress
-    Real alpha_maxwell = bcc(m,IBX,k,j,i)*bcc(m,IBZ,k,j,i);
+    Real alpha_maxwell = -bcc(m,IBX,k,j,i)*bcc(m,IBZ,k,j,i);
     hvars.the_array[1] = alpha_maxwell*vol;
 
     // fill rest of the_array with zeros, if nhist < NHISTORY_VARIABLES
