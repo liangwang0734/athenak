@@ -44,6 +44,9 @@ void MriHistory(HistoryData *pdata, Mesh *pm);
 //  \brief
 
 void ProblemGenerator::UserProblem(ParameterInput *pin, const bool restart) {
+  // enroll user history function
+  user_hist_func = MriHistory;
+
   if (restart) return;
 
   if (pmy_mesh_->three_d) {
@@ -51,9 +54,6 @@ void ProblemGenerator::UserProblem(ParameterInput *pin, const bool restart) {
               << "mri2d problem generator only works in 2D (nx3=1)" << std::endl;
     exit(EXIT_FAILURE);
   }
-
-  // enroll user history function
-  user_hist_func = MriHistory;
 
   // initialize problem variables
   Real amp   = pin->GetReal("problem","amp");
